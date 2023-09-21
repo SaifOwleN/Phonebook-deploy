@@ -1,8 +1,10 @@
+require("dotenv").config();
+
 const express = require("express");
 const morgan = require("morgan");
 const cors = require("cors");
-
 const app = express();
+const Entry = require("./models/entries");
 
 app.use(cors());
 app.use(express.static("dist"));
@@ -44,22 +46,22 @@ app.get("/info", (request, response) => {
   const local = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   response.send(
-    `<p>Phonebook has info for ${persons.length} people </p></br><p>${date} ${local}</p>`
+    `<p>Phonebook has info for ${Entry.length} people </p></br><p>${date} ${local}</p>`
   );
 });
 
 app.get("/api/persons", (req, res) => {
-  res.json(persons);
+  Entry.find({}).then((entry) => res.json(entry));
 });
 
 app.get("/api/persons/:id", (req, res) => {
-  const id = req.params.id;
-  const person = persons.find((p) => p.id == id);
-  if (person) {
-    return res.json(person);
-  } else {
-    res.status(404).end();
-  }
+  Entry.findById(request.params.id).then((entry) => {
+    if (entry) {
+      return res.json(entry);
+    } else {
+      res.status(404).end();
+    }
+  });
 });
 
 app.delete("/api/persons/:id", (req, res) => {
@@ -70,28 +72,23 @@ app.delete("/api/persons/:id", (req, res) => {
 });
 
 app.post("/api/persons", (req, res) => {
-  const person = req.body;
-  if (!person.name) {
+  const entry = new Entry({
+    name: req.body.name,
+    number: req.body.number,
+  });
+  if (!entry.name) {
     return res.status(400).json({
       error: "name missing",
     });
-  } else if (!person.number) {
+  } else if (!entry.number) {
     return res.status(400).json({
       error: "number missing",
     });
-  } else if (persons.find((p) => person.name == p.name)) {
-    return res.status(400).json({
-      error: "name must be unique",
-    });
   }
-
-  person.id = Math.floor(Math.random() * 100000);
-
-  persons = persons.concat(person);
-  res.json(person);
+  entry.save().then((entry) => res.json(entry));
 });
 
-const PORT = 5000;
+const PORT = process.env.PORT;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
