@@ -18,28 +18,18 @@ app.use(
   morgan(":method :url :status :res[content-length] - :response-time ms :Data")
 );
 
-let persons = [
-  {
-    id: 1,
-    name: "Arto Hellas",
-    number: "040-123456",
-  },
-  {
-    id: 2,
-    name: "Ada Lovelace",
-    number: "39-44-5323523",
-  },
-  {
-    id: 3,
-    name: "Dan Abramov",
-    number: "12-43-234345",
-  },
-  {
-    id: 4,
-    name: "Mary Poppendieck",
-    number: "39-23-6423122",
-  },
-];
+const ErrorHandler = (error, request, response, next) => {
+  if (error.name === "CastError") {
+    return response.status(400).send({ error: "malformatted id" });
+  } else if (error.name === "ValidationError") {
+    return response.status(400).json({ error: error.message });
+  }
+  next(error);
+};
+
+const unknownEndpoint = (request, response) => {
+  response.status(404).send({ error: "unknown endpoint" });
+};
 
 app.get("/info", (request, response) => {
   const date = new Date().toLocaleString();
@@ -54,24 +44,27 @@ app.get("/api/persons", (req, res) => {
   Entry.find({}).then((entry) => res.json(entry));
 });
 
-app.get("/api/persons/:id", (req, res) => {
-  Entry.findById(request.params.id).then((entry) => {
-    if (entry) {
-      return res.json(entry);
-    } else {
-      res.status(404).end();
-    }
-  });
+app.get("/api/persons/:id", (req, res, next) => {
+  Entry.findById(req.params.id)
+    .then((entry) => {
+      if (entry) {
+        return res.json(entry);
+      } else {
+        res.status(404).end();
+      }
+    })
+    .catch((error) => next(error));
 });
 
-app.delete("/api/persons/:id", (req, res) => {
-  const id = req.params.id;
-  persons = persons.filter((p) => p.id != id);
-
-  res.status(204).end();
+app.delete("/api/persons/:id", (req, res, next) => {
+  Entry.findByIdAndRemove(req.params.id)
+    .then((r) => {
+      res.status(204).end();
+    })
+    .catch((error) => next(error));
 });
 
-app.post("/api/persons", (req, res) => {
+app.post("/api/persons", (req, res, next) => {
   const entry = new Entry({
     name: req.body.name,
     number: req.body.number,
@@ -85,8 +78,29 @@ app.post("/api/persons", (req, res) => {
       error: "number missing",
     });
   }
-  entry.save().then((entry) => res.json(entry));
+
+  entry
+    .save()
+    .then((entry) => res.json(entry))
+    .catch((error) => next(error));
 });
+
+app.put("/api/persons/:id", (req, res, next) => {
+  const entry = {
+    name: req.body.name,
+    number: req.body.number,
+  };
+  console.log("entry", entry);
+
+  Entry.findByIdAndUpdate(req.params.id, entry)
+    .then((updatedPerson) => {
+      res.json(updatedPerson);
+    })
+    .catch((error) => next(error));
+});
+
+app.use(ErrorHandler);
+app.use(unknownEndpoint);
 
 const PORT = process.env.PORT;
 app.listen(PORT, () => {
